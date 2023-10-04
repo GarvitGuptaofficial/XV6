@@ -119,6 +119,12 @@ struct proc
   uint rtime;                  // How long the process ran for
   uint ctime;                  // When was the process created
   uint etime;                  // When did the process exited
+  struct trapframe* copytrap;
+  uint64 nticks;
+  uint64 intervalticks;
+  uint64 alarmcond;
+  uint64 handleradd;
 };
 
 extern struct proc proc[NPROC];
+extern int readcount;

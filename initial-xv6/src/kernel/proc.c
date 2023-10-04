@@ -124,6 +124,10 @@ allocproc(void)
   return 0;
 
 found:
+  p->alarmcond=0;
+  p->handleradd=0;
+  p->intervalticks=0;
+  p->nticks=0;
   p->pid = allocpid();
   p->state = USED;
 
@@ -460,7 +464,6 @@ int wait(uint64 addr)
 //    via swtch back to the scheduler.
 void scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
 
   c->proc = 0;
@@ -469,6 +472,7 @@ void scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
+  struct proc *p;
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
@@ -487,6 +491,61 @@ void scheduler(void)
       }
       release(&p->lock);
     }
+
+    // #ifdef FCFS
+  //   struct proc *p;
+  //   struct proc* min_process=0;
+  //   int i=0; // 1 if init already started
+  //    for (p = proc; p < &proc[NPROC]; p++)
+  //   {
+  //     i++;
+  //     acquire(&p->lock);
+  //       int flag=1;
+  //     if (p->state == RUNNABLE)
+  //     {
+  //       i++;
+  //        if(min_process->pid==1 && i>1){
+  //            flag=1;
+  //        }
+
+  //         if(p->pid==1){
+  //            min_process=p;
+  //            flag=0;
+  //           //  init_cond=1;
+  //        }
+         
+        
+        
+  //        if(p->pid>1){
+  //         if(min_process==0){
+  //           min_process=p;
+  //           flag=0;
+  //         }else{
+  //           if(p->ctime<min_process->ctime){
+  //             release(&min_process->lock);
+  //             min_process=p;
+  //             flag=0;
+  //           }
+  //         }
+  //        }
+  //     }
+
+  //     if(flag){
+  //     release(&p->lock);
+  //     }
+  //   }
+    
+
+
+  //   if(min_process!=0){
+  //     min_process->state=RUNNING;
+  //     c->proc = min_process;
+  //     swtch(&c->context, &min_process->context);
+  //     c->proc=0;
+  //     release(&min_process->lock);
+  //   }
+  //   // #endif
+  
   }
 }
 

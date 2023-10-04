@@ -108,3 +108,35 @@ sys_waitx(void)
     return -1;
   return ret;
 }
+
+uint64
+getreadcount(void){
+  return readcount;
+}
+
+uint64
+sigalarm(void){
+  int interval;
+  uint64 handler;
+  argint(0,&interval);
+  argaddr(1,&handler);
+  struct proc* curr_process=myproc();
+  curr_process->alarmcond=0;
+  curr_process->intervalticks=interval;
+  curr_process->nticks=0;
+  curr_process->handleradd=handler;
+  return 0;
+}
+
+uint64
+sigreturn(void){
+  struct proc* curr_process=myproc();
+  // *(curr_process->trapframe)=*(curr_process->copytrap);
+  memmove(curr_process->trapframe,curr_process->copytrap,PGSIZE);
+  curr_process->alarmcond=0;
+  curr_process->nticks=0;
+  kfree(curr_process->copytrap);
+  usertrapret();
+  // return curr_process->trapframe->a0;
+  return 0;
+}
