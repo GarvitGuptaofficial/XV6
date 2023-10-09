@@ -38,21 +38,26 @@ int main(int argc, char **argv){
     perror("[-]bind error");
     exit(1);
   }
-while(1){
-    int r;
-    scanf("%d",&r);
-    if(r==0){
-        break;
-    }
+ 
   bzero(buffer, 1024);
   addr_size = sizeof(client_addr);
-  recvfrom(sockfd, buffer, 1024, 0, (struct sockaddr*)&client_addr, &addr_size);
+  int r=recvfrom(sockfd, buffer, 1024, 0, (struct sockaddr*)&client_addr, &addr_size);
+  if(r<0){
+    printf("recvform failed\n");
+      return -1;
+  }
   printf("[+]Data recv: %s\n", buffer);
 
   bzero(buffer, 1024);
   strcpy(buffer, "Welcome to the UDP Server.");
-  sendto(sockfd, buffer, 1024, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+  int l=sendto(sockfd, buffer, 1024, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+  if(l<0){
+    printf("sendto failed\n");
+    return -1;
+  }
+  
   printf("[+]Data send: %s\n", buffer);
-}
+  close(sockfd);
+  printf("Server Closed\n");
   return 0;
 }

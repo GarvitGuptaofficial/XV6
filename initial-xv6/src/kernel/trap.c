@@ -79,16 +79,61 @@ void usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if (which_dev == 2){
-    p->nticks=p->nticks+1;
-          if( p->nticks%p->intervalticks==0 && p->alarmcond==0){
-              p->copytrap=kalloc();
-              memmove(p->copytrap,p->trapframe,PGSIZE);
-              p->alarmcond=1;
-              p->nticks=0;
-              p->trapframe->epc=p->handleradd;
+  if (which_dev == 2)
+  {
+    p->nticks = p->nticks + 1;
+    if (p->nticks % p->intervalticks == 0 && p->alarmcond == 0)
+    {
+      p->copytrap = kalloc();
+      memmove(p->copytrap, p->trapframe, PGSIZE);
+      p->alarmcond = 1;
+      p->nticks = 0;
+      p->trapframe->epc = p->handleradd;
+    }
+#ifdef RR
+  yield();
+#endif
+
+#ifdef FCFS
+#endif
+
+#ifdef MLFQ
+ 
+
+    struct proc *temp;
+    int min_queue = 6;
+    for (temp = proc; temp < &proc[NPROC]; temp++)
+    {
+      if (min_queue > temp->queue_num)
+      {
+        min_queue = temp->queue_num;
       }
-    yield();
+    }
+
+    if (min_queue < p->queue_num)
+    {
+      push_front(&priorityqueue[p->queue_num], p);
+      yield();
+    }
+
+    // if (p->state == RUNNING)
+    // {
+    //   p->cpurtime++;
+    // }
+    
+    if (p->pid != 0 && p->cpurtime >= p->queuetimeslice[p->queue_num])
+    {
+      remove(&priorityqueue[p->queue_num], p->pid);
+      if (p->queue_num < 3)
+      {
+        p->queue_num++;
+      }
+      p->cpurtime = 0;
+      p->queuewaittime = ticks;
+      push(&priorityqueue[p->queue_num], p);
+      yield();
+    }
+#endif
   }
 
   usertrapret();
@@ -162,7 +207,52 @@ void kerneltrap()
 
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  {
+    
+  #ifdef RR
     yield();
+  #endif
+
+#ifdef FCFS
+#endif
+
+#ifdef MLFQ
+struct proc* p=myproc(); 
+    struct proc *temp;
+    int min_queue = 6;
+    for (temp = proc; temp < &proc[NPROC]; temp++)
+    {
+      if (min_queue > temp->queue_num)
+      {
+        min_queue = temp->queue_num;
+      }
+    }
+
+    if (min_queue < p->queue_num)
+    {
+      push_front(&priorityqueue[p->queue_num], p);
+      yield();
+    }
+
+    // if (p->state == RUNNING)
+    // {
+    //   p->cpurtime++;
+    // }
+    
+    if (p->pid != 0 && p->cpurtime >= p->queuetimeslice[p->queue_num])
+    {
+      remove(&priorityqueue[p->queue_num], p->pid);
+      if (p->queue_num < 3)
+      {
+        p->queue_num++;
+      }
+      p->cpurtime = 0;
+      p->queuewaittime = ticks;
+      push(&priorityqueue[p->queue_num], p);
+      yield();
+    }
+    #endif
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

@@ -92,6 +92,7 @@ enum procstate
   ZOMBIE
 };
 
+typedef struct proc* Procarr;
 // Per-process state
 struct proc
 {
@@ -124,7 +125,32 @@ struct proc
   uint64 intervalticks;
   uint64 alarmcond;
   uint64 handleradd;
+  uint64 inqueuecond;
+  uint64 cpurtime;
+  uint64 queue_num;
+  uint64 queuetimeslice[4];
+  uint64 queuewaittime;
 };
 
 extern struct proc proc[NPROC];
 extern int readcount;
+typedef struct queue* Queue;
+struct queue{
+   Queue next;
+   Queue back;
+   uint64 lastindex;
+   Queue last;
+   uint64 noofelements;
+   Procarr process;
+};
+extern struct queue priorityqueue[4];
+
+void pop(struct queue* h);
+void push(struct queue* h,Procarr m);
+Procarr firstelement(struct queue*h);
+int empty(struct queue*h);
+void remove(struct queue*h,uint64 pid);
+int checkrunnable(struct queue*h);
+void printqueue(struct queue* h);
+void printlast(struct queue* h);
+void push_front(Queue h,Procarr m);

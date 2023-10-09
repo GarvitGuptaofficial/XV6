@@ -12,9 +12,11 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
+// initialised priorityqueues
+struct queue priorityqueue[4];
+
 int nextpid = 1;
 struct spinlock pid_lock;
-
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -25,6 +27,165 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+// queue functions
+
+void pop(struct queue *h)
+{
+  if (h->noofelements == 0)
+  {
+    return;
+  }
+  struct queue *temp = h->last->back;
+  temp->next = 0;
+  // h->last->back=NULL;
+  h->last = temp;
+  h->noofelements--;
+  return;
+}
+
+void push(struct queue *h, Procarr m)
+{
+  struct queue *r = (struct queue *)kalloc();
+  if(r==0){
+    printf("Kalloc failed\n");
+  }
+  r->process = m;
+  r->next = 0;
+  r->process->inqueuecond = 1;
+  if (h->noofelements == 0)
+  {
+    h->next = r;
+    h->noofelements++;
+    h->last = r;
+    r->back = h;
+  }
+  else
+  {
+    h->last->next = r;
+    r->back = h->last;
+    h->last = r;
+    h->noofelements++;
+  }
+  return;
+}
+
+void push_front(Queue h, Procarr m)
+{
+  struct queue *r = (struct queue *)kalloc();
+  if(r==0){
+    printf("Kalloc failed\n");
+  }
+  r->process = m;
+  r->process->inqueuecond = 1;
+  if (h->noofelements == 0)
+  {
+    h->next = r;
+    h->noofelements++;
+    h->last = r;
+    r->back = h;
+    r->next = 0;
+  }
+  else
+  {
+    Queue nxt = h->next;
+    h->next = r;
+    r->back = h;
+    r->next = nxt;
+    nxt->back = r;
+    h->noofelements++;
+  }
+  return;
+}
+
+void printlast(struct queue *h)
+{
+  if (h->noofelements != 0)
+  {
+    printf("last element: %d ", h->last->process->pid);
+  }
+}
+
+void printqueue(struct queue *h)
+{
+  Queue temp = h->next;
+  while (h->noofelements != 0 && temp != h->last->next)
+  {
+    printf("%d  ", temp->process->pid);
+    temp = temp->next;
+  }
+  return;
+}
+// Procarr firstelement(struct queue*h){
+//   if(h->lastindex==0){
+//     return 0;
+//   }
+//   return h->processes[0];
+// }
+
+int empty(struct queue *h)
+{
+  if (h->noofelements == 0)
+  {
+    return 1;
+  }
+  else
+  {
+    return 0;
+  }
+}
+
+void remove(struct queue *h, uint64 pid)
+{
+  Queue temp = h->next;
+  while (temp != 0 && h->noofelements != 0)
+  {
+    if (temp->process->pid == pid)
+    {
+      temp->process->inqueuecond = 0;
+      if (temp->next == 0)
+      {
+        Queue w = temp->back;
+        w->next = 0;
+        h->last = w;
+        h->noofelements--;
+        kfree((void *)temp);
+      }
+      else
+      {
+        Queue w1 = temp->back;
+        Queue w2 = temp->next;
+        w1->next = w2;
+        w2->back = w1;
+        // h->last=w2;
+        h->noofelements--;
+        kfree((void *)temp);
+      }
+      // temp->process=0;
+
+      break;
+    }
+    temp = temp->next;
+  }
+
+  return;
+}
+
+int checkrunnable(struct queue *h)
+{
+  int c = 0;
+  Queue temp = h->next;
+  while (temp != 0 && h->noofelements != 0)
+  {
+    if (temp->process->state == RUNNABLE)
+    {
+      c++;
+      break;
+    }
+    temp = temp->next;
+  }
+  return c;
+}
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -124,13 +285,20 @@ allocproc(void)
   return 0;
 
 found:
-  p->alarmcond=0;
-  p->handleradd=0;
-  p->intervalticks=0;
-  p->nticks=0;
+  p->alarmcond = 0;
+  p->handleradd = 0;
+  p->intervalticks = 0;
+  p->nticks = 0;
   p->pid = allocpid();
   p->state = USED;
-
+  p->inqueuecond = 1;
+  p->cpurtime = 0;
+  p->queue_num = 0;
+  p->queuetimeslice[0] = 1;
+  p->queuetimeslice[1] = 3;
+  p->queuetimeslice[2] = 9;
+  p->queuetimeslice[3] = 15;
+  p->queuewaittime = ticks;
   // Allocate a trapframe page.
   if ((p->trapframe = (struct trapframe *)kalloc()) == 0)
   {
@@ -156,6 +324,12 @@ found:
   p->rtime = 0;
   p->etime = 0;
   p->ctime = ticks;
+  #ifdef MLFQ
+  push(&priorityqueue[0], p);
+  #endif
+  // printf("Process entered queue:%d\n",p->pid);
+  // printlast(&priorityqueue[p->queue_num]);
+  // printf("\n");
   return p;
 }
 
@@ -165,11 +339,21 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  #ifdef MLFQ
+  remove(&priorityqueue[p->queue_num], p->pid);
+  #endif
+  // p->inqueuecond=0;
+  // printf("removing\n");
   if (p->trapframe)
     kfree((void *)p->trapframe);
+  if (p->copytrap)
+  {
+    kfree((void *)p->copytrap);
+  }
   p->trapframe = 0;
   if (p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -472,7 +656,8 @@ void scheduler(void)
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
 
-  struct proc *p;
+#ifdef RR
+    struct proc *p;
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
@@ -491,61 +676,133 @@ void scheduler(void)
       }
       release(&p->lock);
     }
+#endif
 
-    // #ifdef FCFS
-  //   struct proc *p;
-  //   struct proc* min_process=0;
-  //   int i=0; // 1 if init already started
-  //    for (p = proc; p < &proc[NPROC]; p++)
-  //   {
-  //     i++;
-  //     acquire(&p->lock);
-  //       int flag=1;
-  //     if (p->state == RUNNABLE)
-  //     {
-  //       i++;
-  //        if(min_process->pid==1 && i>1){
-  //            flag=1;
-  //        }
+#ifdef FCFS
+    struct proc *p;
+    struct proc *min_process = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
 
-  //         if(p->pid==1){
-  //            min_process=p;
-  //            flag=0;
-  //           //  init_cond=1;
-  //        }
-         
-        
-        
-  //        if(p->pid>1){
-  //         if(min_process==0){
-  //           min_process=p;
-  //           flag=0;
-  //         }else{
-  //           if(p->ctime<min_process->ctime){
-  //             release(&min_process->lock);
-  //             min_process=p;
-  //             flag=0;
-  //           }
-  //         }
-  //        }
-  //     }
+      acquire(&p->lock);
+      // int flag=1;
+      if (p->state == RUNNABLE)
+      {
+        if (min_process == 0)
+        {
+          min_process = p;
+          // flag=0;
+        }
+        else
+        {
+          if (p->ctime < min_process->ctime)
+          {
+            // release(&min_process->lock);
+            min_process = p;
+            // flag=0;
+          }
+        }
+      }
 
-  //     if(flag){
-  //     release(&p->lock);
-  //     }
-  //   }
-    
+      // if(flag){
+      release(&p->lock);
+      // }
+    }
 
+    if (min_process != 0)
+    {
+      acquire(&min_process->lock);
+      if (min_process->state == RUNNABLE)
+      {
+        min_process->state = RUNNING;
+        c->proc = min_process;
+        swtch(&c->context, &min_process->context);
+        c->proc = 0;
+      }
+      release(&min_process->lock);
+    }
+#endif
 
-  //   if(min_process!=0){
-  //     min_process->state=RUNNING;
-  //     c->proc = min_process;
-  //     swtch(&c->context, &min_process->context);
-  //     c->proc=0;
-  //     release(&min_process->lock);
-  //   }
-  //   // #endif
-  
+#ifdef MLFQ
+    struct proc *temp;
+    for (temp = proc; temp < &proc[NPROC]; temp++)
+    {
+      acquire(&temp->lock);
+      if (temp->inqueuecond == 0 && temp->state == RUNNABLE)
+      {
+        temp->inqueuecond = 1;
+        temp->queuewaittime = ticks;
+        push(&priorityqueue[temp->queue_num], temp);
+      }
+      release(&temp->lock);
+    }
+
+    for (temp = proc; temp < &proc[NPROC]; temp++)
+    {
+      acquire(&temp->lock);
+      if (temp->inqueuecond == 1 && temp->state == RUNNABLE && (ticks - temp->queuewaittime) >= 30)
+      {
+        remove(&priorityqueue[temp->queue_num], temp->pid);
+        if (temp->queue_num > 0)
+        {
+          temp->queue_num--;
+        }
+        temp->cpurtime = 0;
+        temp->queuewaittime = ticks;
+        push(&priorityqueue[temp->queue_num], temp);
+      }
+      release(&temp->lock);
+    }
+
+    struct proc *run_proc = 0;
+    Queue NXT;
+    int flag = 0;
+    for (int j = 0; j < 4; j++)
+    {
+      Queue queueelem = priorityqueue[j].next;
+      while (queueelem != 0 && priorityqueue[j].noofelements != 0)
+      {
+        NXT = queueelem->next;
+        if (queueelem->process != 0)
+        {
+          acquire(&queueelem->process->lock);
+          if (queueelem->process->state == RUNNABLE)
+          {
+            run_proc = queueelem->process;
+            release(&run_proc->lock);
+            remove(&priorityqueue[j], queueelem->process->pid);
+            flag = 1;
+            break;
+          }
+          else
+          {
+            release(&queueelem->process->lock);
+            remove(&priorityqueue[j], queueelem->process->pid);
+          }
+        }
+        queueelem = NXT;
+      }
+      if (flag == 1)
+      {
+        break;
+      }
+    }
+
+    if (run_proc != 0 && flag == 1)
+    {
+      acquire(&run_proc->lock);
+      if (run_proc->state == RUNNABLE)
+      {
+        run_proc->state = RUNNING;
+        c->proc = run_proc;
+        // run_proc->queuewaittime=ticks;
+        // procdump();
+        swtch(&c->context, &run_proc->context);
+        c->proc = 0;
+      }
+      release(&run_proc->lock);
+    }
+#endif
   }
 }
 
@@ -581,6 +838,9 @@ void yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+#ifdef MLFQ
+  p->queuewaittime = ticks;
+#endif
   sched();
   release(&p->lock);
 }
@@ -650,6 +910,15 @@ void wakeup(void *chan)
       if (p->state == SLEEPING && p->chan == chan)
       {
         p->state = RUNNABLE;
+#ifdef MLFQ
+        if (p->inqueuecond == 0)
+        {
+          p->inqueuecond = 1;
+          p->cpurtime = 0;
+          p->queuewaittime = ticks;
+          push(&priorityqueue[p->queue_num], p);
+        }
+#endif
       }
       release(&p->lock);
     }
@@ -757,9 +1026,34 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
-    printf("\n");
+
+#ifdef RR
+    printf("%d %s %s\n", p->pid, state, p->name);
+#endif
+
+#ifdef FCFS
+    printf("%d %s %s\n", p->pid, state, p->name);
+#endif
+
+#ifdef MLFQ
+    char *tt = state;
+    state = tt;
+    // if (p->state == RUNNING)
+    printf("%d %d %s %s %d %d %d\n", ticks, p->pid, state, p->name, p->queue_num, p->cpurtime, ticks - p->queuewaittime);
+#endif
+    // printqueue(&priorityqueue[p->queue_num]);
+    //  printf("\n");
   }
+  // printf("\n");
+  // for (int i = 0; i < 4; i++)
+  // {
+  //   printf("Queue%d: ", i);
+  //   printqueue(&priorityqueue[i]);
+  //   // printf(" ");
+  //   // printlast(&priorityqueue[i]);
+  //   printf("\n");
+  // }
+  // printf("\n");
 }
 
 // waitx
@@ -826,7 +1120,23 @@ void update_time()
     if (p->state == RUNNING)
     {
       p->rtime++;
+#ifdef MLFQ
+      p->cpurtime++;
+#endif
+      // if(p->pid>=9 && p->pid <= 13){
+      // printf("%d %d %d\n",p->pid,p->queue_num,p->cpurtime);
+      // }
     }
     release(&p->lock);
   }
+  // for (p = proc; p < &proc[NPROC]; p++)
+  // {
+  //   if (p->state == RUNNABLE || p->state == RUNNING)
+  //   {
+  //     if (p->pid >= 9 && p->pid <= 13)
+  //     {
+  //       printf("%d %d %d\n", p->pid, ticks, p->queue_num);
+  //     }
+  //   }
+  // }
 }

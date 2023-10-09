@@ -5,19 +5,17 @@
 #include <arpa/inet.h>
 
 int main(int argc, char **argv){
-
-  if (argc != 2) {
+   if(argc!=2){
     printf("Usage: %s <port>\n", argv[0]);
     exit(0);
   }
-
   char *ip = "127.0.0.1";
   int port = atoi(argv[1]);
 
   int sock;
   struct sockaddr_in addr;
   socklen_t addr_size;
-  char buffer[1024];
+  char buffer[500];
   int n;
 
   sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -25,7 +23,6 @@ int main(int argc, char **argv){
     perror("[-]Socket error");
     exit(1);
   }
-  
   printf("[+]TCP server socket created.\n");
   memset(&buffer,'\0',sizeof(buffer));
   memset(&addr, '\0', sizeof(addr));
@@ -38,24 +35,43 @@ int main(int argc, char **argv){
     return -1;
   }
   printf("Connected to the server.\n");
-
-  bzero(buffer, 1024);
-  scanf("%s",buffer);
-  printf("Client: %s\n", buffer);
+while(1){
+  bzero(buffer, 500);
+  int r;
+    printf("1 for rock\n");
+    printf("2 for paper\n");
+    printf("3 for scissor\n");
+    printf("4 to Exit Game\n");
+    printf("Player2 Enter your choice:");
+    scanf("%d",&r);
+  // scanf("%s",buffer);
+  sprintf(buffer,"%d",r);
   int send_r=send(sock, buffer, strlen(buffer), 0);
   if(send_r<0){
       printf("send failed\n");
       return -1;
   }
 
-  bzero(buffer, 1024);
+  bzero(buffer, 500);
   int recv_r=recv(sock, buffer, sizeof(buffer), 0);
   if(recv_r<0){
       printf("recv failed\n");
       return -1;
     }
-  printf("Server: %s\n", buffer);
-
+   r=atoi(buffer);
+  if(r==5){
+    printf("You(Player2) Wins\n");
+  }else if(r==6){
+    printf("You(Player2) Lose\n");
+  }else if(r==7){
+    printf("Draw\n");
+  }else if(r==4){
+    printf("Game Quit\n");
+    break;
+  }else if(r==20){
+    printf("Invalid Option Entered\n");
+  }
+}
   printf("Disconnected from the server.\n");
   close(sock);
   return 0;

@@ -22,25 +22,34 @@ int main(int argc, char **argv){
   socklen_t addr_size;
 
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+  if(sockfd<0){
+     perror("[-]Socket error");
+    exit(1);
+  }
+
   memset(&addr, '\0', sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
   addr.sin_addr.s_addr = inet_addr(ip);
-while(1){
-    int r;
-    scanf("%d",&r);
-    if(r==0){
-        break;
-    }
+   
   bzero(buffer, 1024);
   strcpy(buffer, "Hello, World!");
-  sendto(sockfd, buffer, 1024, 0, (struct sockaddr*)&addr, sizeof(addr));
+  int y=sendto(sockfd, buffer, 1024, 0, (struct sockaddr*)&addr, sizeof(addr));
+  if(y<0){
+     printf("sendto failed\n");
+     return -1;
+  }
   printf("[+]Data send: %s\n", buffer);
 
   bzero(buffer, 1024);
   addr_size = sizeof(addr);
-  recvfrom(sockfd, buffer, 1024, 0, (struct sockaddr*)&addr, &addr_size);
+  int m=recvfrom(sockfd, buffer, 1024, 0, (struct sockaddr*)&addr, &addr_size);
+  if(m<0){
+     printf("recvfrom failed\n");
+     return -1;
+  }
   printf("[+]Data recv: %s\n", buffer);
-}
+  close(sockfd);
+  printf("Client CLosed\n");
   return 0;
 }

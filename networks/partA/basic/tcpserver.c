@@ -4,10 +4,15 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-int main(){
+int main(int argc, char **argv){
+
+   if (argc != 2) {
+    printf("Usage: %s <port>\n", argv[0]);
+    exit(0);
+  }
 
   char *ip = "127.0.0.1";
-  int port = 5567;
+  int port = atoi(argv[1]);
 
   int server_sock, client_sock;
   struct sockaddr_in server_addr, client_addr;
@@ -40,7 +45,6 @@ int main(){
   }
   printf("Listening...\n");
 
-  while(1){
     addr_size = sizeof(client_addr);
     client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &addr_size);
     if(client_sock<0){
@@ -63,7 +67,7 @@ int main(){
     if(send_r<0){
       printf("send failed\n");
       return -1;
-    }
+    
     printf("[+]Client disconnected.\n\n");
 
     close(client_sock);
