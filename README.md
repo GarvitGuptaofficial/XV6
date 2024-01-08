@@ -1,11 +1,60 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/DLipn7os)
-# Intro to Xv6
-OSN Monsoon 2023 mini project 2
+# Testing system calls
 
-## Some pointers
-- main xv6 source code is present inside `initial_xv6/src` directory. This is where you will be making all the additions/modifications necessary for the first 3 specifications. 
-- work inside the `networks/` directory for the Specification 4 as mentioned in the assignment.
-- Instructions to test the xv6 implementations are given in the `initial_xv6/README.md` file. 
+## Running Tests for getreadcount
 
-- You are free to delete these instructions and add your report before submitting. 
+Running tests for this syscall is easy. Just do the following from
+inside the `initial-xv6` directory:
 
+```sh
+prompt> ./test-getreadcounts.sh
+```
+
+If you implemented things correctly, you should get some notification
+that the tests passed. If not ...
+
+The tests assume that xv6 source code is found in the `src/` subdirectory.
+If it's not there, the script will complain.
+
+The test script does a one-time clean build of your xv6 source code
+using a newly generated makefile called `Makefile.test`. You can use
+this when debugging (assuming you ever make mistakes, that is), e.g.:
+
+```sh
+prompt> cd src/
+prompt> make -f Makefile.test qemu-nox
+```
+
+You can suppress the repeated building of xv6 in the tests with the
+`-s` flag. This should make repeated testing faster:
+
+```sh
+prompt> ./test-getreadcounts.sh -s
+```
+
+---
+
+## Running Tests for sigalarm and sigreturn
+
+**After implementing both sigalarm and sigreturn**, do the following:
+- Make the entry for `alarmtest` in `src/Makefile` inside `UPROGS`
+- Run the command inside xv6:
+    ```sh
+    prompt> alarmtest
+    ```
+
+---
+
+## Getting runtimes and waittimes for your schedulers
+- Run the following command in xv6:
+    ```sh
+    prompt> schedulertest
+    ```  
+---
+
+## Running tests for entire xv6 OS
+- Run the following command in xv6:
+    ```sh
+    prompt> usertests
+    ```
+
+---
