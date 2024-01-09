@@ -10,9 +10,10 @@
 #include "defs.h"
 
 void freerange(void *pa_start, void *pa_end);
-
+struct spinlock pagereflock;
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
+int pagerefnum[PGROUNDUP(PHYSTOP) / PGSIZE];
 
 struct run {
   struct run *next;
@@ -23,9 +24,38 @@ struct {
   struct run *freelist;
 } kmem;
 
+
+void increasepageref(void *add){
+  acquire(&pagereflock);
+  int arr_index=(uint64)add/PGSIZE;
+  if(pagerefnum[arr_index]>=0){
+    pagerefnum[arr_index]+=1;
+  }else{
+    panic("increasepageref failed\n");
+  }
+  release(&pagereflock);
+}
+
+void decreasepageref(void *add){
+  acquire(&pagereflock);
+  int arr_index=(uint64)add/PGSIZE;
+  if(pagerefnum[arr_index]>0){
+    pagerefnum[arr_index]-=1;
+  }else{
+    panic("decreasepageref failed\n");
+  }
+  release(&pagereflock);
+}
+
 void
 kinit()
 {
+  initlock(&pagereflock,"pagelock");
+  acquire(&pagereflock);
+  for(int i=0;i<(PGROUNDUP(PHYSTOP)/PGSIZE);i++){
+    pagerefnum[i]=0;
+  }
+  release(&pagereflock);
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
 }
@@ -35,8 +65,11 @@ freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+    increasepageref(p);
     kfree(p);
+  }
+    
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -50,6 +83,15 @@ kfree(void *pa)
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+  
+  decreasepageref(pa);
+  acquire(&pagereflock);
+  int check=pagerefnum[(uint64)pa/PGSIZE];
+  if(check!=0){
+    release(&pagereflock);
+    return;
+  }
+  release(&pagereflock);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -76,7 +118,9 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r){
     memset((char*)r, 5, PGSIZE); // fill with junk
+    increasepageref((void*)r); 
+  }
   return (void*)r;
 }

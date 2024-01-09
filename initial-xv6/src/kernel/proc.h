@@ -130,6 +130,14 @@ struct proc
   uint64 queue_num;
   uint64 queuetimeslice[4];
   uint64 queuewaittime;
+  uint stime;
+  uint wtime;
+  uint mrtime;
+  uint num_schedules;
+  uint SP;
+  uint RBI;
+  uint DP;
+  uint setprior;
 };
 
 extern struct proc proc[NPROC];

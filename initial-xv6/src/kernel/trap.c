@@ -27,6 +27,44 @@ void trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int faulthandle(void*add1,pagetable_t table){
+  struct proc*p=myproc();
+       int correct_cond=2;
+        uint64 add=(uint64)add1;
+       uint64 copypage,copyflag;
+       uint64 *entry_table;
+            if(add<MAXVA && (add<PGROUNDDOWN(p->trapframe->sp)-PGSIZE || add>PGROUNDDOWN(p->trapframe->sp))){
+            entry_table=walk(table,PGROUNDDOWN(add),0);
+            copypage=PTE2PA(*entry_table);
+            
+            if(entry_table==0){
+              correct_cond=0;
+            }
+            if(copypage==0){
+              correct_cond=0;
+            }
+            if(correct_cond!=0){
+            copyflag=PTE_FLAGS(*entry_table);
+            int cond2=copyflag & COW;
+            if(cond2){
+            copyflag =  (copyflag | PTE_W);
+            copyflag = copyflag & (~COW);
+            char *newpage = kalloc();
+            if(newpage==0){
+              return 0;
+            }
+            correct_cond=1;
+            memmove(newpage, (void *)copypage, PGSIZE);
+            *entry_table = copyflag | PA2PTE(newpage);
+            kfree((void *)copypage);
+            }
+            }
+            }
+            else{
+            correct_cond=0;
+            }
+            return correct_cond;
+}
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -63,6 +101,15 @@ void usertrap(void)
     intr_on();
 
     syscall();
+  }else if(r_scause()==15){
+     if(r_stval()){
+      if(faulthandle((void*)r_stval(),p->pagetable)==0){
+        p->killed=1;
+      }
+     }else{
+      p->killed=1;
+     }
+
   }
   else if ((which_dev = devintr()) != 0)
   {

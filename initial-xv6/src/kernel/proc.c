@@ -29,6 +29,35 @@ extern char trampoline[]; // trampoline.S
 struct spinlock wait_lock;
 
 // queue functions
+int max(int a, int b)
+{
+  if (a > b)
+  {
+    return a;
+  }
+  return b;
+}
+
+int min(int a, int b)
+{
+  if (a > b)
+  {
+    return b;
+  }
+  return a;
+}
+
+int proc_rbi(struct proc *p)
+{
+  int a = ((3 * p->mrtime - p->stime - p->wtime) / (p->mrtime + p->wtime + p->stime + 1)) * 50;
+  return max(a, 0);
+}
+
+int proc_dp(struct proc *p)
+{
+  return min(100, p->stime + p->RBI);
+}
+
 
 void pop(struct queue *h)
 {
@@ -801,6 +830,75 @@ void scheduler(void)
         c->proc = 0;
       }
       release(&run_proc->lock);
+    }
+#endif
+
+#ifdef PBS
+     struct proc *mp = 0;
+    for (p = proc; p < &proc[NPROC]; p++)
+    {
+      acquire(&p->lock);
+      if (p->setprior == 0)
+      {
+        p->RBI = proc_rbi(p);
+        p->DP = proc_dp(p);
+      }
+      else
+      {
+        p->setprior = 0;
+      }
+      if (p->state == RUNNABLE)
+      {
+        if (mp == 0)
+        {
+          mp = p;
+        }
+        else
+        {
+
+          if (mp->DP > p->DP)
+          {
+            mp = p;
+          }
+          else if (mp->DP < p->DP)
+          {
+            release(&p->lock);
+            continue;
+          }
+
+          if (mp->num_schedules > p->num_schedules)
+          {
+            mp = p;
+          }
+          else if (mp->num_schedules < p->num_schedules)
+          {
+            release(&p->lock);
+            continue;
+          }
+
+          if (mp->ctime < p->ctime)
+          {
+            mp = p;
+          }
+        }
+      }
+      release(&p->lock);
+    }
+
+    if (mp != 0)
+    {
+      acquire(&mp->lock);
+      if (mp->state == RUNNABLE)
+      {
+        mp->state = RUNNING;
+        mp->mrtime = 0;
+        mp->stime = 0;
+        mp->num_schedules++;
+        c->proc = mp;
+        swtch(&c->context, &mp->context);
+        c->proc = 0;
+      }
+      release(&mp->lock);
     }
 #endif
   }
