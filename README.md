@@ -1,60 +1,50 @@
-# Testing system calls
+# First Come First Serve(FCFS):
 
-## Running Tests for getreadcount
+1. In void scheduler function running for loop over 'proc' array and obtaing process with minimun 'ctime' i.e minimum creation time(first arrived process) and storing in 'min_process' and scheduling it.
 
-Running tests for this syscall is easy. Just do the following from
-inside the `initial-xv6` directory:
+2. Removed 'yield()' in 'usertrap' and 'kernaltrap' function in trap.c .So that process will run until it no longer needs CPU time.
 
-```sh
-prompt> ./test-getreadcounts.sh
-```
+3. Average runtime: 16 , Waittime : 166
 
-If you implemented things correctly, you should get some notification
-that the tests passed. If not ...
 
-The tests assume that xv6 source code is found in the `src/` subdirectory.
-If it's not there, the script will complain.
 
-The test script does a one-time clean build of your xv6 source code
-using a newly generated makefile called `Makefile.test`. You can use
-this when debugging (assuming you ever make mistakes, that is), e.g.:
+# Multi Level Feedback Queue(MLFQ):
 
-```sh
-prompt> cd src/
-prompt> make -f Makefile.test qemu-nox
-```
+1. First made changes in 'struct proc' :
+    1.  inqueuecond : To check if process is present in queue or not.
+    2.  cpurtime : CPU runtime of a process in a queue.
+    3.  queue_num : Queue number.
+    4.  queuetimeslice[4] : To store queue level timeslice.
+    5.  queuewaittime : Entry time of process in queue.
 
-You can suppress the repeated building of xv6 in the tests with the
-`-s` flag. This should make repeated testing faster:
+2. Implemented Queue functions like push,pop,remove,push_front,etc.
 
-```sh
-prompt> ./test-getreadcounts.sh -s
-```
+3. Push process in allocproc.
 
----
+4. In scheduler function in proc.c:
+    1. Running a for loop over 'proc' array and pushing all process which are RUNNABLE and not in queue.
+    2. Again iterating over 'proc' array and check for process in queue and if its waittime execeeded threshold limit(30)i.e aging then increasing its priority by removing from lower queue and push at back of higher queue.Changing 'cpurtime' to 0 and 'queuewaittime' to ticks.
+    3. Now iterating over all queue's starting from highest priority queue and removing process from it and checking for RUNNABLE process ,if obtained a RUNNABLE process then scheduling it.
+5. In 'yield()' function updating queuewaittime to ticks.
 
-## Running Tests for sigalarm and sigreturn
+6. In 'wakeup()' function pushing process in previous queue and changing cpurtime,queuewaittime.
 
-**After implementing both sigalarm and sigreturn**, do the following:
-- Make the entry for `alarmtest` in `src/Makefile` inside `UPROGS`
-- Run the command inside xv6:
-    ```sh
-    prompt> alarmtest
-    ```
+7. In update_time in proc.c function increasing cpurtime.
 
----
+8. In Usertrap and Kerneltrap function in trap.c:
+    1. Iterate over all processes in 'proc' array and check for a process with queue number(i.e priority higher) than current process.
+    2. If Higher priority process is obtained then call yield() to schedule it and push current process in front of its queue from which it was removed.
+    3. Check for cpuruntime , if current process has execeeded queue time slice then decrease its priority and call yield().
 
-## Getting runtimes and waittimes for your schedulers
-- Run the following command in xv6:
-    ```sh
-    prompt> schedulertest
-    ```  
----
+9. Average rtime: 16 , wtime : 163
 
-## Running tests for entire xv6 OS
-- Run the following command in xv6:
-    ```sh
-    prompt> usertests
-    ```
+# Round Robin(RR):
 
----
+1. Average rtime: 16 ,wtime : 166
+
+# Analysis:
+
+  rtime : RR = MLFQ = FCFS
+  wtime : FCFS < MLFQ < RR
+
+![MLFQ analysis](./graph.png)
